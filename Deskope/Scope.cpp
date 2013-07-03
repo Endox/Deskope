@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Scope.h"
+#include "glm/glm.hpp"
 
 Scope::Scope() : m_fltYaw(0),
 				 m_fltPitch(0),
@@ -136,7 +137,8 @@ void Scope::AllocateWindowsResources()
 	ResizeSource();
 
 	m_BackDC = CreateCompatibleDC(m_hdc);
-	m_BackBM = CreateCompatibleBitmap(m_hdc, m_RiftDisplayInfo.dmPelsWidth, m_RiftDisplayInfo.dmPelsHeight);
+	//m_BackBM = CreateCompatibleBitmap(m_hdc, m_RiftDisplayInfo.dmPelsWidth, m_RiftDisplayInfo.dmPelsHeight);
+	m_BackBM = CreateCompatibleBitmap(m_hdc, m_intMainDisplayWidth, m_intMainDisplayHeight);
 	SelectObject(m_BackDC, m_BackBM);
 
 	SetStretchBltMode(m_winCopyDC, HALFTONE);
@@ -163,7 +165,8 @@ void Scope::ResizeSource()
 	m_intSrcHeight = int(m_RiftDisplayInfo.dmPelsHeight / m_fltZoom);
 
 	DeleteObject(m_winCopyBM);
-	m_winCopyBM = CreateCompatibleBitmap(m_winDC, m_RiftDisplayInfo.dmPelsWidth / 2 + m_intSBSOffset + m_intImageSeparation, m_RiftDisplayInfo.dmPelsHeight);
+	//m_winCopyBM = CreateCompatibleBitmap(m_winDC, m_RiftDisplayInfo.dmPelsWidth / 2 + m_intSBSOffset + m_intImageSeparation, m_RiftDisplayInfo.dmPelsHeight);
+	m_winCopyBM = CreateCompatibleBitmap(m_winDC, m_intMainDisplayWidth, m_intMainDisplayHeight);
 	SelectObject(m_winCopyDC, m_winCopyBM);
 
 	// After deleting the old bitmap, call CaptureScreen explicitly.
@@ -277,10 +280,22 @@ LRESULT Scope::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
 void Scope::GetSourceCoordinates(int *x, int *y)
 {
-	if (m_boolTracking) {
+	/*if (m_boolTracking) {
 		m_sFusion.GetOrientation().GetEulerAngles<Axis_Y, Axis_X, Axis_Z>(&m_fltYaw, &m_fltPitch, &m_fltRoll);
 		*x = int(m_intMainDisplayWidth / 2 - (m_intSrcWidth + m_intSBSOffset) / 2.0 + (m_fltYaw * -180.0 / PI) * m_intPixelsPerDegree);
 		*y = int(m_intMainDisplayHeight / 2 - m_intSrcHeight / 2.0 + (m_fltPitch *  -180.0 / PI) * m_intPixelsPerDegree); 
+	} 
+	else {
+		POINT p;
+		GetCursorPos(&p);
+		*x = p.x - int((m_intSrcWidth + m_intSBSOffset + m_intImageSeparation / m_fltZoom) / 2);
+		*y = p.y - m_intSrcHeight / 2; 
+	}*/
+
+	if (m_boolTracking) {
+		m_sFusion.GetOrientation().GetEulerAngles<Axis_Y, Axis_X, Axis_Z>(&m_fltYaw, &m_fltPitch, &m_fltRoll);
+		*x = (m_fltYaw * -180.0 / PI) * m_intPixelsPerDegree;
+		*y = (m_fltPitch *  -180.0 / PI) * m_intPixelsPerDegree; 
 	} 
 	else {
 		POINT p;
@@ -303,23 +318,8 @@ void Scope::CaptureScreen()
 	// blit a copy of the screen so you don't have to draw on the screen DC
 	BITMAP WinCopyBMInfo;
 	GetObjectW(m_winCopyBM, sizeof(BITMAP), &WinCopyBMInfo);
-	StretchBlt(m_winCopyDC, 0, 0, WinCopyBMInfo.bmWidth, WinCopyBMInfo.bmHeight, m_winDC, SourceRect.left, SourceRect.top, m_intSrcWidth + int((m_intSBSOffset + m_intImageSeparation) / m_fltZoom), m_intSrcHeight, SRCCOPY | CAPTUREBLT);
-
-	// fix recursive display when looking at Scope window
-	RECT ScopeRect;
-	GetWindowRect(m_hwnd, &ScopeRect);
-	RECT Intersection;
-	IntersectRect(&Intersection, &SourceRect, &ScopeRect);
-	if (!IsRectEmpty(&Intersection)) {
-		LONG width = Intersection.right - Intersection.left;
-		LONG height = Intersection.bottom - Intersection.top;
-		Intersection.left = long(abs(Intersection.left - SourceRect.left) * m_fltZoom);
-		Intersection.top = long(abs(Intersection.top - SourceRect.top) * m_fltZoom);
-		Intersection.right = long(Intersection.left + width * m_fltZoom);
-		Intersection.bottom = long(Intersection.top + height * m_fltZoom);
-		FillRect(m_winCopyDC, &Intersection, (HBRUSH)COLOR_WINDOWTEXT);
-	}
-
+	BitBlt(m_winCopyDC, 0, 0, WinCopyBMInfo.bmWidth, WinCopyBMInfo.bmHeight, m_winDC, 0, 0, SRCCOPY | CAPTUREBLT);
+	
 	//Draw the cursor
 	m_GlobalCursor.cbSize = sizeof(CURSORINFO);
 	GetCursorInfo(&m_GlobalCursor);
@@ -327,13 +327,58 @@ void Scope::CaptureScreen()
 		ICONINFO CursorInfo;
 		GetIconInfo((HICON)m_GlobalCursor.hCursor, &CursorInfo);
 		DrawIconEx(m_winCopyDC,
-			       int((m_GlobalCursor.ptScreenPos.x - SourceRect.left - CursorInfo.xHotspot) * m_fltZoom), int((m_GlobalCursor.ptScreenPos.y - SourceRect.top - CursorInfo.yHotspot) * m_fltZoom),
+			       m_GlobalCursor.ptScreenPos.x, m_GlobalCursor.ptScreenPos.y,
 				   m_GlobalCursor.hCursor,
 				   int(m_intCursorWidth * m_fltZoom), int(m_intCursorHeight * m_fltZoom),
 				   0, NULL, DI_COMPAT | DI_NORMAL);		
 		DeleteObject(CursorInfo.hbmColor);
 		DeleteObject(CursorInfo.hbmMask);
 	}
+
+	// Rotate and offset the desktop
+
+	// Build the destination parallelogram using glm
+	glm::vec2 pts_vec2[3];
+	pts_vec2[0] = glm::vec2(0, 0);
+	pts_vec2[1] = glm::vec2(m_intMainDisplayWidth, 0);
+	pts_vec2[2] = glm::vec2(0, m_intMainDisplayHeight);
+	
+	glm::vec2 center(m_intMainDisplayWidth / 2, m_intMainDisplayHeight / 2);
+
+	const float roll = -m_fltRoll;
+	glm::mat2 R = glm::mat2(cos(roll), -sin(roll), sin(roll), cos(roll));
+	glm::mat2 S = glm::mat2(m_fltZoom, 0, 0, m_fltZoom);
+
+	// Transform the points and convert to GDI format
+	POINT pts[3];
+	for (int i = 0; i < 3; ++i) {
+		// Move to origin [0, 0]
+		pts_vec2[i] -= center;
+
+		// Scale (zoom)
+		pts_vec2[i] = S * pts_vec2[i];
+
+		// Offset according to HMD orientation
+		pts_vec2[i].x -= m_intScreenCapX;
+		pts_vec2[i].y -= m_intScreenCapY;
+
+		// Rotate
+		pts_vec2[i] = R * pts_vec2[i];
+
+		// Move back
+		pts_vec2[i] += center;
+
+		// Convert to GDI format
+		pts[i].x = pts_vec2[i].x;
+		pts[i].y = pts_vec2[i].y;
+	}
+	
+	// Clear the back buffer 
+	RECT ClearRect = {0, 0, m_intMainDisplayWidth, m_intMainDisplayHeight};
+	FillRect(m_BackDC, &ClearRect, (HBRUSH)COLOR_WINDOWTEXT);
+
+	// Blit the rotated desktop to back buffer
+	PlgBlt(m_BackDC, pts, m_winCopyDC, 0, 0, m_intMainDisplayWidth, m_intMainDisplayHeight, NULL, 0, 0);
 }
 
 void Scope::DrawScope()
@@ -341,13 +386,21 @@ void Scope::DrawScope()
 	int NewX, NewY;
 	GetSourceCoordinates(&NewX, &NewY);
 
-	// black out back buffer because whole screen won't redraw
-	RECT ScopeRect = {0, 0, m_RiftDisplayInfo.dmPelsWidth, m_RiftDisplayInfo.dmPelsHeight};
-	FillRect(m_BackDC, &ScopeRect, (HBRUSH)COLOR_WINDOWTEXT);
+	BitBlt( m_hdc, 
+			0, 0, 
+			m_RiftDisplayInfo.dmPelsWidth / 2, m_RiftDisplayInfo.dmPelsHeight, 
+			m_BackDC, 
+			(m_intMainDisplayWidth - m_RiftDisplayInfo.dmPelsWidth / 2 - m_intImageSeparation) / 2 + (NewX - m_intScreenCapX), (m_intMainDisplayHeight - m_RiftDisplayInfo.dmPelsHeight) / 2 + (NewY - m_intScreenCapY), 
+			SRCCOPY);
+	BitBlt( m_hdc,
+			m_RiftDisplayInfo.dmPelsWidth / 2, 0, 
+			m_RiftDisplayInfo.dmPelsWidth / 2, m_RiftDisplayInfo.dmPelsHeight,
+			m_BackDC, 
+			(m_intMainDisplayWidth - m_RiftDisplayInfo.dmPelsWidth / 2 + m_intImageSeparation) / 2 + (NewX - m_intScreenCapX), (m_intMainDisplayHeight - m_RiftDisplayInfo.dmPelsHeight) / 2 + (NewY - m_intScreenCapY), 
+			SRCCOPY);
+	
 
-	BitBlt(m_BackDC, 0, 0, m_RiftDisplayInfo.dmPelsWidth / 2, m_RiftDisplayInfo.dmPelsHeight, m_winCopyDC, int((NewX - m_intScreenCapX) * m_fltZoom), int((NewY - m_intScreenCapY) * m_fltZoom), SRCCOPY);
-	BitBlt(m_BackDC, m_RiftDisplayInfo.dmPelsWidth / 2, 0, m_RiftDisplayInfo.dmPelsWidth / 2, m_RiftDisplayInfo.dmPelsHeight, m_winCopyDC, int((NewX - m_intScreenCapX + m_intSBSOffset) * m_fltZoom) + m_intImageSeparation, int((NewY - m_intScreenCapY) * m_fltZoom), SRCCOPY);
-	BitBlt(m_hdc, 0, 0, m_RiftDisplayInfo.dmPelsWidth, m_RiftDisplayInfo.dmPelsHeight, m_BackDC, 0, 0, SRCCOPY);
+	//StretchBlt(m_hdc, 0, 0, 1280, 800, m_BackDC, 0, 0, 1920, 1200, SRCCOPY);
 	UpdateWindow(m_hwnd);
 }
 
