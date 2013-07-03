@@ -415,6 +415,7 @@ void Scope::EnableTracking(bool boolEnableTracking)
 		if (m_pHMD) {
 			m_pSensor = *m_pHMD->GetSensor();
 			m_sFusion.AttachToSensor(m_pSensor);
+			m_sFusion.SetYawCorrectionEnabled(true); // Enable yaw correction
 			m_boolTracking = true;
 		}
 		else {
