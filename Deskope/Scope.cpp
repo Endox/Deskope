@@ -474,10 +474,10 @@ void Scope::RestrictCursor()
 	GetSourceCoordinates(&SourceX, &SourceY);
 	if (m_boolClipCursor) {
 		RECT clip;
-		clip.left = long(SourceX + m_intSrcWidth * m_fltCursorBorder);
-		clip.right = long(SourceX + m_intImageSeparation / m_fltZoom + m_intSrcWidth * (1 - m_fltCursorBorder));
-		clip.top = long(SourceY + m_intSrcHeight * m_fltCursorBorder);
-		clip.bottom = long(SourceY + m_intSrcHeight * (1 - m_fltCursorBorder));
+		clip.left = (m_intMainDisplayWidth - m_intSrcWidth * m_fltCursorBorder) / 2 + SourceX / m_fltZoom;
+		clip.right = (m_intMainDisplayWidth + m_intSrcWidth * m_fltCursorBorder) / 2 + SourceX / m_fltZoom;
+		clip.top = (m_intMainDisplayHeight - m_intSrcHeight * m_fltCursorBorder) / 2 + SourceY / m_fltZoom;
+		clip.bottom = (m_intMainDisplayHeight + m_intSrcHeight * m_fltCursorBorder) / 2 + SourceY / m_fltZoom;
 		ClipCursor(&clip);
 	}
 	else {
