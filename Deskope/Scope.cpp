@@ -137,7 +137,6 @@ void Scope::AllocateWindowsResources()
 	ResizeSource();
 
 	m_BackDC = CreateCompatibleDC(m_hdc);
-	//m_BackBM = CreateCompatibleBitmap(m_hdc, m_RiftDisplayInfo.dmPelsWidth, m_RiftDisplayInfo.dmPelsHeight);
 	m_BackBM = CreateCompatibleBitmap(m_hdc, m_intMainDisplayWidth, m_intMainDisplayHeight);
 	SelectObject(m_BackDC, m_BackBM);
 
@@ -165,7 +164,6 @@ void Scope::ResizeSource()
 	m_intSrcHeight = int(m_RiftDisplayInfo.dmPelsHeight / m_fltZoom);
 
 	DeleteObject(m_winCopyBM);
-	//m_winCopyBM = CreateCompatibleBitmap(m_winDC, m_RiftDisplayInfo.dmPelsWidth / 2 + m_intSBSOffset + m_intImageSeparation, m_RiftDisplayInfo.dmPelsHeight);
 	m_winCopyBM = CreateCompatibleBitmap(m_winDC, m_intMainDisplayWidth, m_intMainDisplayHeight);
 	SelectObject(m_winCopyDC, m_winCopyBM);
 
@@ -280,18 +278,6 @@ LRESULT Scope::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
 void Scope::GetSourceCoordinates(int *x, int *y)
 {
-	/*if (m_boolTracking) {
-		m_sFusion.GetOrientation().GetEulerAngles<Axis_Y, Axis_X, Axis_Z>(&m_fltYaw, &m_fltPitch, &m_fltRoll);
-		*x = int(m_intMainDisplayWidth / 2 - (m_intSrcWidth + m_intSBSOffset) / 2.0 + (m_fltYaw * -180.0 / PI) * m_intPixelsPerDegree);
-		*y = int(m_intMainDisplayHeight / 2 - m_intSrcHeight / 2.0 + (m_fltPitch *  -180.0 / PI) * m_intPixelsPerDegree); 
-	} 
-	else {
-		POINT p;
-		GetCursorPos(&p);
-		*x = p.x - int((m_intSrcWidth + m_intSBSOffset + m_intImageSeparation / m_fltZoom) / 2);
-		*y = p.y - m_intSrcHeight / 2; 
-	}*/
-
 	if (m_boolTracking) {
 		m_sFusion.GetOrientation().GetEulerAngles<Axis_Y, Axis_X, Axis_Z>(&m_fltYaw, &m_fltPitch, &m_fltRoll);
 		*x = (m_fltYaw * -180.0 / PI) * m_intPixelsPerDegree;
@@ -399,8 +385,6 @@ void Scope::DrawScope()
 			(m_intMainDisplayWidth - m_RiftDisplayInfo.dmPelsWidth / 2 + m_intImageSeparation) / 2 + (NewX - m_intScreenCapX), (m_intMainDisplayHeight - m_RiftDisplayInfo.dmPelsHeight) / 2 + (NewY - m_intScreenCapY), 
 			SRCCOPY);
 	
-
-	//StretchBlt(m_hdc, 0, 0, 1280, 800, m_BackDC, 0, 0, 1920, 1200, SRCCOPY);
 	UpdateWindow(m_hwnd);
 }
 
